@@ -60,6 +60,12 @@ keywords:
       product_type: "new_release"
     - keyword: "限定版"
       product_type: "limited_edition"
+    - keyword: "限定"
+      product_type: "limited"
+    - keyword: "特典"
+      product_type: "bonus"
+    - keyword: "発売日決定"
+      product_type: "release_date"
 
 server:
   host: "0.0.0.0"

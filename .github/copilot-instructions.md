@@ -73,10 +73,24 @@ HTML Response (with AdSense + affiliate links)
 - Located in `AffiliateEngine` class (app.py)
 - Triggered on `GET /article/{id}` and `GET /`
 - Process:
-  1. Scan article content for keywords from `config.yaml` → `keywords.affiliate_targets[]`
+  1. Scan article content AND TITLE for keywords from `config.yaml` → `keywords.affiliate_targets[]`
   2. For each match, replace first occurrence with `<a href="affiliate_url">keyword</a>`
   3. Log replacement in `affiliate_links` table (article_id, keyword, link_type, affiliate_url)
   4. Append tracking ID via `_build_amazon_link()` or `_build_rakuten_link()`
+  5. **NEW**: Generate universal Amazon search button for ALL articles using article title
+  6. **NEW**: Add "🔥お宝情報！" label for hot news (予約開始, 限定, 特典, 発売日決定)
+
+### Universal Amazon Search Links
+
+- **All articles** get an "🛒 Amazonでチェック" button linking to Amazon search with article title
+- URL format: `https://www.amazon.co.jp/s?k=[encoded_title]&tag=tyoukinoko-22`
+- Button appears on both index cards and detail pages
+
+### Hot News Detection
+
+- Articles with keywords: "予約開始", "限定", "特典", "発売日決定" get special "🔥お宝情報！" label
+- Label positioned top-right of article cards with pulsing animation
+- CSS: `.hot-news-label` with gradient background and animation
 
 ### Duplicate Prevention
 
@@ -89,6 +103,14 @@ HTML Response (with AdSense + affiliate links)
 - Homepage shows 20 articles per page, sorted by `published_at DESC`
 - URL pattern: `/?page=2`, `/?page=3` etc.
 - Search filtering by source: `?source=Famitsu`
+
+## Important Implementation Details
+
+### Footer Amazon Ranking Banner
+
+- Fixed banner in footer linking to Amazon's video games bestseller page
+- URL: `https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0`
+- Styled as prominent call-to-action button with warning color
 
 ## Important Implementation Details
 

@@ -38,6 +38,7 @@ class AffiliateEngine:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.keywords = self._build_keyword_map()
+        self.amazon_tracking_id = config['affiliate']['amazon']['tracking_id']
 
     def _build_keyword_map(self) -> Dict[str, Dict[str, Any]]:
         """キーワードマップを構築"""
@@ -46,6 +47,100 @@ class AffiliateEngine:
             keyword = kw_config['keyword']
             keyword_map[keyword] = kw_config
         return keyword_map
+
+    def generate_amazon_search_link(self, title: str) -> str:
+        """記事タイトルでAmazon検索リンクを生成"""
+        # タイトルをURLエンコード
+        import urllib.parse
+        encoded_title = urllib.parse.quote(title)
+        return f"https://www.amazon.co.jp/s?k={encoded_title}&tag={self.amazon_tracking_id}"
+
+    def is_hot_news(self, title: str) -> bool:
+        """タイトルに「爆売れ」キーワードが含まれるか判定"""
+        hot_keywords = ["予約開始", "限定", "特典", "発売日決定"]
+        return any(keyword in title for keyword in hot_keywords)
+
+    def process_title(self, title: str, article_id: Optional[int] = None) -> str:
+        """タイトルにアフィリエイトリンクを埋め込む"""
+        processed_title = title
+
+        for keyword, keyword_config in self.keywords.items():
+            if keyword.lower() in processed_title.lower():
+                affiliate_links = keyword_config.get('affiliate_links', [])
+
+                for link_config in affiliate_links:
+                    link_type = link_config.get('type', '')
+
+                    if link_type == 'amazon' and self.config['affiliate'].get('amazon', {}).get('enabled'):
+                        affiliate_url = self._build_amazon_link(
+                            link_config['url_pattern'],
+                            self.amazon_tracking_id
+                        )
+                        processed_title = self._inject_link(
+                            processed_title, keyword, affiliate_url
+                        )
+
+                        if article_id:
+                            DB.save_affiliate_link(
+                                article_id, keyword, 'amazon', None, affiliate_url
+                            )
+
+                    elif link_type == 'rakuten' and self.config['affiliate'].get('rakuten', {}).get('enabled'):
+                        affiliate_url = self._build_rakuten_link(
+                            link_config['url_pattern'],
+                            self.config['affiliate']['rakuten']['affiliate_id']
+                        )
+                        processed_title = self._inject_link(
+                            processed_title, keyword, affiliate_url
+                        )
+
+                        if article_id:
+                            DB.save_affiliate_link(
+                                article_id, keyword, 'rakuten', None, affiliate_url
+                            )
+
+        return processed_title
+
+    def process_content(self, content: str, article_id: Optional[int] = None) -> str:
+        """コンテンツにアフィリエイトリンクを埋め込む"""
+        processed_content = content
+
+        for keyword, keyword_config in self.keywords.items():
+            if keyword.lower() in content.lower():
+                affiliate_links = keyword_config.get('affiliate_links', [])
+
+                for link_config in affiliate_links:
+                    link_type = link_config.get('type', '')
+
+                    if link_type == 'amazon' and self.config['affiliate'].get('amazon', {}).get('enabled'):
+                        affiliate_url = self._build_amazon_link(
+                            link_config['url_pattern'],
+                            self.amazon_tracking_id
+                        )
+                        processed_content = self._inject_link(
+                            processed_content, keyword, affiliate_url
+                        )
+
+                        if article_id:
+                            DB.save_affiliate_link(
+                                article_id, keyword, 'amazon', None, affiliate_url
+                            )
+
+                    elif link_type == 'rakuten' and self.config['affiliate'].get('rakuten', {}).get('enabled'):
+                        affiliate_url = self._build_rakuten_link(
+                            link_config['url_pattern'],
+                            self.config['affiliate']['rakuten']['affiliate_id']
+                        )
+                        processed_content = self._inject_link(
+                            processed_content, keyword, affiliate_url
+                        )
+
+                        if article_id:
+                            DB.save_affiliate_link(
+                                article_id, keyword, 'rakuten', None, affiliate_url
+                            )
+
+        return processed_content
 
     def process_content(self, content: str, article_id: Optional[int] = None) -> str:
         """コンテンツにアフィリエイトリンクを埋め込む"""
@@ -148,17 +243,34 @@ async def index(page: int = Query(1, ge=1)):
     for article in articles:
         image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image"></div>'
 
+        # タイトルを処理（アフィリエイトリンク埋め込み）
+        processed_title = affiliate_engine.process_title(article["title"], article["id"])
+
+        # ホットニュース判定
+        hot_label = ""
+        if affiliate_engine.is_hot_news(article["title"]):
+            hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
+
+        # Amazon検索リンク生成
+        amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+
         article_html += f'''
         <div class="col-md-6 col-lg-4 mb-4">
             <div class="card h-100 article-card">
+                {hot_label}
                 {image_tag}
                 <div class="card-body">
                     <small class="text-muted badge bg-info">{article["source"]}</small>
-                    <h5 class="card-title mt-2">{article["title"]}</h5>
+                    <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <small class="text-muted">{article["published_at"][:10]}</small>
-                        <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
+                        <div class="btn-group" role="group">
+                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning" target="_blank" rel="noopener noreferrer">
+                                🛒 Amazonでチェック
+                            </a>
+                            <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -222,10 +334,16 @@ async def article_detail(article_id: int):
     content = article['content']
     content_with_affiliate = affiliate_engine.process_content(content, article_id)
 
+    # タイトルを処理
+    processed_title = affiliate_engine.process_title(article["title"], article_id)
+
+    # Amazon検索リンク生成
+    amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+
     article_html = f'''
     <div class="container mt-5">
         <article class="article-detail">
-            <h1>{article["title"]}</h1>
+            <h1>{processed_title}</h1>
             <div class="article-meta">
                 <span class="badge bg-info">{article["source"]}</span>
                 <span class="text-muted ms-3">{article["published_at"]}</span>
@@ -237,7 +355,10 @@ async def article_detail(article_id: int):
             </div>
             <hr>
             <div class="article-actions">
-                <a href="{article["url"]}" class="btn btn-primary" target="_blank">元の記事</a>
+                <a href="{amazon_search_url}" class="btn btn-warning me-2" target="_blank" rel="noopener noreferrer">
+                    🛒 Amazonで関連商品をチェック
+                </a>
+                <a href="{article["url"]}" class="btn btn-primary me-2" target="_blank">元の記事</a>
                 <a href="/" class="btn btn-secondary">トップへ戻る</a>
             </div>
         </article>
@@ -270,15 +391,35 @@ async def search(q: str = Query(...)):
     for article in articles:
         image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image"></div>'
 
+        # タイトルを処理（アフィリエイトリンク埋め込み）
+        processed_title = affiliate_engine.process_title(article["title"], article["id"])
+
+        # ホットニュース判定
+        hot_label = ""
+        if affiliate_engine.is_hot_news(article["title"]):
+            hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
+
+        # Amazon検索リンク生成
+        amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+
         article_html += f'''
         <div class="col-md-6 col-lg-4 mb-4">
             <div class="card h-100 article-card">
+                {hot_label}
                 {image_tag}
                 <div class="card-body">
                     <small class="text-muted badge bg-info">{article["source"]}</small>
-                    <h5 class="card-title mt-2">{article["title"]}</h5>
+                    <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
-                    <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">{article["published_at"][:10]}</small>
+                        <div class="btn-group" role="group">
+                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning" target="_blank" rel="noopener noreferrer">
+                                🛒 Amazonでチェック
+                            </a>
+                            <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

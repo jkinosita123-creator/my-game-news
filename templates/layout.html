@@ -118,6 +118,7 @@
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             height: 100%;
+            position: relative;
         }
 
         .article-card:hover {
@@ -240,13 +241,18 @@
         footer {
             background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%);
             color: white;
-            padding: 2rem 0;
-            text-align: center;
+            padding: 3rem 0 2rem;
             margin-top: 3rem;
         }
 
+        footer h5 {
+            color: #e94560;
+            margin-bottom: 1rem;
+        }
+
         footer p {
-            margin: 0;
+            margin: 0 0 1rem 0;
+            color: #b0b0b0;
         }
 
         footer a {
@@ -256,6 +262,16 @@
 
         footer a:hover {
             text-decoration: underline;
+        }
+
+        footer .btn-warning {
+            background: #e94560;
+            border: none;
+            font-weight: bold;
+        }
+
+        footer .btn-warning:hover {
+            background: #ff6b7a;
         }
 
         /* 統計バー */
@@ -287,9 +303,26 @@
             margin: 0;
         }
 
-        /* Google AdSense 広告 */
-        .adsbygoogle {
-            margin: 2rem 0;
+        /* ホットニュースラベル */
+        .hot-news-label {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
 
         /* レスポンシブ対応 */
@@ -390,8 +423,20 @@
     <!-- フッター -->
     <footer>
         <div class="container">
-            <p>&copy; 2026 {{ site_name }} | <a href="#">プライバシーポリシー</a> | <a href="#">お問い合わせ</a></p>
-            <p style="margin-top: 1rem; font-size: 0.9rem;">すべての権利は著作者に帰属します。</p>
+            <div class="row">
+                <div class="col-md-8">
+                    <h5>今月の注目ランキング</h5>
+                    <p>最新のゲーム売れ筋ランキングをチェック！</p>
+                    <a href="https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0" class="btn btn-warning btn-lg" target="_blank" rel="noopener noreferrer">
+                        🏆 Amazon ゲーム売れ筋ランキングを見る
+                    </a>
+                </div>
+                <div class="col-md-4 text-end">
+                    <p>&copy; 2026 {{ site_name }}</p>
+                    <p><a href="#">プライバシーポリシー</a> | <a href="#">お問い合わせ</a></p>
+                    <p style="margin-top: 1rem; font-size: 0.9rem;">すべての権利は著作者に帰属します。</p>
+                </div>
+            </div>
         </div>
     </footer>
 
