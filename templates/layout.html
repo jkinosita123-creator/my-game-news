@@ -119,6 +119,8 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             height: 100%;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
 
         .article-card:hover {
@@ -128,23 +130,29 @@
 
         .article-card .card-img-top {
             height: 200px;
+            width: 100%;
             object-fit: cover;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            max-width: 100%;
+            display: block;
         }
 
         .placeholder-image {
             height: 200px;
+            width: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjNmNGY2Ii8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5Y2E5Y2EiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7jg5fjg6Hjg7zjgrnjg4jjg7w8L3RleHQ+Cjwvc3ZnPg==');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 1.2rem;
+            font-size: 3rem;
             font-weight: bold;
+        }
+
+        .article-card .card-body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .article-card .card-title {
@@ -152,6 +160,7 @@
             color: #1a1a2e;
             line-height: 1.4;
             min-height: 3rem;
+            flex-grow: 1;
         }
 
         .article-card .card-text {
@@ -162,7 +171,24 @@
         .article-card .badge {
             font-size: 0.75rem;
             padding: 0.4rem 0.8rem;
+            margin-right: 0.5rem;
         }
+
+        .category-tag {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-weight: 600;
+            margin: 0.2rem 0.2rem 0.2rem 0;
+        }
+
+        .category-tag.switch { background: #3b82f6; color: white; }
+        .category-tag.ps5 { background: #1f2937; color: white; }
+        .category-tag.xbox { background: #16a34a; color: white; }
+        .category-tag.pc { background: #8b5cf6; color: white; }
+        .category-tag.steam { background: #0f172a; color: white; }
+        .category-tag.nintendo { background: #dc2626; color: white; }
 
         .article-card .btn {
             padding: 0.4rem 1rem;

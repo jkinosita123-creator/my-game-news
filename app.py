@@ -8,6 +8,7 @@ import logging
 from models import DatabaseManager, Article
 from crawler import RSSCrawler
 import re
+from difflib import SequenceMatcher
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +36,16 @@ crawler.start_scheduler_background()
 class AffiliateEngine:
     """アフィリエイトリンク埋め込みエンジン"""
 
+    # プラットフォーム・カテゴリ定義
+    CATEGORY_KEYWORDS = {
+        'Switch': {'keywords': ['Switch', 'Nintendo Switch', 'ニンテンドースイッチ'], 'tag': 'switch', 'label': 'Switch'},
+        'PS5': {'keywords': ['PS5', 'PlayStation 5', 'プレステ5'], 'tag': 'ps5', 'label': 'PS5'},
+        'Xbox': {'keywords': ['Xbox', 'XSX'], 'tag': 'xbox', 'label': 'Xbox'},
+        'PC': {'keywords': ['PC', 'Steam', 'ゲーミングPC'], 'tag': 'pc', 'label': 'PC'},
+        'Steam': {'keywords': ['Steam'], 'tag': 'steam', 'label': 'Steam'},
+        'Nintendo': {'keywords': ['Nintendo'], 'tag': 'nintendo', 'label': 'Nintendo'},
+    }
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.keywords = self._build_keyword_map()
@@ -48,29 +59,40 @@ class AffiliateEngine:
             keyword_map[keyword] = kw_config
         return keyword_map
 
+    def get_category_tags(self, title: str) -> List[Dict[str, str]]:
+        """タイトルから自動カテゴリタグを抽出"""
+        tags = []
+        for category, config in self.CATEGORY_KEYWORDS.items():
+            for keyword in config['keywords']:
+                if keyword.lower() in title.lower():
+                    tags.append({
+                        'tag': config['tag'],
+                        'label': config['label']
+                    })
+                    break
+        return tags
+
     def generate_amazon_search_link(self, title: str) -> str:
         """記事タイトルでAmazon検索リンクを生成（最適化版）"""
-        import re
         import urllib.parse
 
-        # タイトルから括弧内の情報を除去（全角/半角対応）
+        # タイトルから括弧内の情報を除去
         title_clean = re.sub(r'[（(].*[）)]', '', title).strip()
         title_clean = re.sub(r'[【].*[】]', '', title_clean).strip()
         title_clean = re.sub(r'[『].*[』]', '', title_clean).strip()
 
         # 意味のある検索キーワードを抽出
-        # ゲーム名やプラットフォーム名を優先
         keywords = []
         
         # プラットフォームキーワードをチェック
-        platforms = ['Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'Nintendo']
+        platforms = ['Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'Nintendo', 'PC']
         for platform in platforms:
             if platform in title_clean:
                 keywords.append(platform)
                 break
         
         # ゲーム関連キーワードをチェック
-        game_keywords = ['ゲーム', 'ソフト', 'タイトル', '発売', '予約', '限定版', 'コレクターズ', 'エディション']
+        game_keywords = ['ゲーム', 'ソフト', 'タイトル', '発売', '予約', '限定版']
         for kw in game_keywords:
             if kw in title_clean and len(' '.join(keywords + [kw])) <= 20:
                 keywords.append(kw)
@@ -79,14 +101,13 @@ class AffiliateEngine:
         # キーワードが見つからない場合は最初の単語を使用
         if not keywords:
             words = re.split(r'[\s　・]', title_clean)
-            keywords = [word for word in words[:2] if word]  # 最初の2単語
+            keywords = [word for word in words[:2] if word]
         
         # 検索クエリを構築（最大20文字程度）
         search_query = ' '.join(keywords)
         if len(search_query) > 20:
             search_query = search_query[:20].strip()
         
-        # 最低限のキーワードを確保
         if not search_query.strip():
             search_query = "ゲーム"
         
@@ -226,19 +247,49 @@ class AffiliateEngine:
 affiliate_engine = AffiliateEngine(config)
 
 
+def remove_duplicate_articles(articles: List[Dict[str, Any]], similarity_threshold: float = 0.85) -> List[Dict[str, Any]]:
+    """タイトルが酷似している記事を除去（最新のもののみ残す）"""
+    if not articles:
+        return articles
+    
+    filtered_articles = []
+    for article in articles:
+        is_duplicate = False
+        for filtered_article in filtered_articles:
+            # 相似度計算
+            similarity = SequenceMatcher(None, article['title'], filtered_article['title']).ratio()
+            if similarity > similarity_threshold:
+                # 新しい記事なら置き換え、古い記事なら無視
+                if article['published_at'] > filtered_article['published_at']:
+                    filtered_articles.remove(filtered_article)
+                    filtered_articles.append(article)
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            filtered_articles.append(article)
+    
+    return filtered_articles
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(page: int = Query(1, ge=1)):
     """トップページ"""
     limit = 20
     offset = (page - 1) * limit
 
-    articles = db.get_recent_articles(limit=limit, offset=offset)
+    articles = db.get_recent_articles(limit=limit + 10, offset=offset)
+    
+    # 重複記事を除去
+    articles = remove_duplicate_articles(articles)
+    articles = articles[:limit]
+    
     total_articles = db.get_total_articles()
     total_pages = (total_articles + limit - 1) // limit
 
     article_html = ""
     for article in articles:
-        image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image"></div>'
+        image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image">🎮</div>'
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
         processed_title = affiliate_engine.process_title(article["title"], article["id"])
@@ -247,6 +298,15 @@ async def index(page: int = Query(1, ge=1)):
         hot_label = ""
         if affiliate_engine.is_hot_news(article["title"]):
             hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
+
+        # カテゴリタグを取得
+        category_tags = affiliate_engine.get_category_tags(article["title"])
+        category_html = ""
+        if category_tags:
+            category_html = "<div class='mb-2'>"
+            for tag in category_tags:
+                category_html += f'<span class="category-tag {tag["tag"]}">{tag["label"]}</span>'
+            category_html += "</div>"
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
@@ -259,6 +319,7 @@ async def index(page: int = Query(1, ge=1)):
                 {image_tag}
                 <div class="card-body">
                     <small class="text-muted badge bg-info">{article["source"]}</small>
+                    {category_html}
                     <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
                     <div class="d-flex flex-column gap-2 mt-3">
@@ -269,7 +330,7 @@ async def index(page: int = Query(1, ge=1)):
                             <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
                         </div>
                         <a href="{amazon_ranking_url}" class="btn btn-sm btn-success w-100" target="_blank" rel="noopener noreferrer">
-                            🏆 ゲーム売れ筋ランキング
+                            🏆 売れ筋ランキング
                         </a>
                     </div>
                 </div>
@@ -337,6 +398,15 @@ async def article_detail(article_id: int):
     # タイトルを処理
     processed_title = affiliate_engine.process_title(article["title"], article_id)
 
+    # カテゴリタグを取得
+    category_tags = affiliate_engine.get_category_tags(article["title"])
+    category_html = ""
+    if category_tags:
+        category_html = "<div class='mb-3'>"
+        for tag in category_tags:
+            category_html += f'<span class="category-tag {tag["tag"]}">{tag["label"]}</span>'
+        category_html += "</div>"
+
     # Amazon検索リンク生成
     amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
     amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
@@ -345,6 +415,7 @@ async def article_detail(article_id: int):
     <div class="container mt-5">
         <article class="article-detail">
             <h1>{processed_title}</h1>
+            {category_html}
             <div class="article-meta">
                 <span class="badge bg-info">{article["source"]}</span>
                 <span class="text-muted ms-3">{article["published_at"]}</span>
@@ -360,7 +431,7 @@ async def article_detail(article_id: int):
                     🛒 Amazonで関連商品をチェック
                 </a>
                 <a href="{amazon_ranking_url}" class="btn btn-success me-2 mb-2" target="_blank" rel="noopener noreferrer">
-                    🏆 ゲーム売れ筋ランキング
+                    🏆 売れ筋ランキング
                 </a>
                 <a href="{article["url"]}" class="btn btn-primary me-2 mb-2" target="_blank">元の記事</a>
                 <a href="/" class="btn btn-secondary">トップへ戻る</a>
@@ -390,10 +461,13 @@ async def article_detail(article_id: int):
 async def search(q: str = Query(...)):
     """検索ページ"""
     articles = db.search_articles(q, limit=50)
+    
+    # 重複記事を除去
+    articles = remove_duplicate_articles(articles)
 
     article_html = ""
     for article in articles:
-        image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image"></div>'
+        image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">' if article["image_url"] else '<div class="placeholder-image">🎮</div>'
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
         processed_title = affiliate_engine.process_title(article["title"], article["id"])
@@ -402,6 +476,15 @@ async def search(q: str = Query(...)):
         hot_label = ""
         if affiliate_engine.is_hot_news(article["title"]):
             hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
+
+        # カテゴリタグを取得
+        category_tags = affiliate_engine.get_category_tags(article["title"])
+        category_html = ""
+        if category_tags:
+            category_html = "<div class='mb-2'>"
+            for tag in category_tags:
+                category_html += f'<span class="category-tag {tag["tag"]}">{tag["label"]}</span>'
+            category_html += "</div>"
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
@@ -414,6 +497,7 @@ async def search(q: str = Query(...)):
                 {image_tag}
                 <div class="card-body">
                     <small class="text-muted badge bg-info">{article["source"]}</small>
+                    {category_html}
                     <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
                     <div class="d-flex flex-column gap-2 mt-3">
@@ -424,7 +508,7 @@ async def search(q: str = Query(...)):
                             <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
                         </div>
                         <a href="{amazon_ranking_url}" class="btn btn-sm btn-success w-100" target="_blank" rel="noopener noreferrer">
-                            🏆 ゲーム売れ筋ランキング
+                            🏆 売れ筋ランキング
                         </a>
                     </div>
                 </div>
