@@ -1,8 +1,8 @@
 site:
-  name: "俺専用最強速報"
+  name: "最新ゲームニュース・情報まとめ"
   description: "最新ゲームニュース・情報まとめ"
   language: "ja"
-  base_url: "http://localhost:8000"
+  base_url: "https://my-game-news.onrender.com/"
 
 database:
   path: "./articles.db"
@@ -27,7 +27,7 @@ crawler:
 affiliate:
   amazon:
     enabled: true
-    tracking_id: "YOUR_AMAZON_TRACKING_ID"
+    tracking_id: "tyoukinoko-22"
     region: "JP"
   rakuten:
     enabled: true
