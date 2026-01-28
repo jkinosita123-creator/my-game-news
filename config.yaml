@@ -19,7 +19,7 @@ rss_feeds:
     priority: 2
 
 crawler:
-  interval_minutes: 60
+  interval_minutes: 15
   timeout_seconds: 30
   max_articles: 500
   cleanup_days: 30
