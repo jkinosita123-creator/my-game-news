@@ -9,6 +9,7 @@ from models import DatabaseManager, Article
 from crawler import RSSCrawler
 import re
 from difflib import SequenceMatcher
+import html
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,7 +76,6 @@ class AffiliateEngine:
     def generate_fallback_image_url(self, title: str) -> str:
         """タイトルからキーワードを抽出してLoremFlickr画像URLを生成"""
         import urllib.parse
-        import re
         
         # タイトルからキーワード抽出
         keywords = []
@@ -112,7 +112,7 @@ class AffiliateEngine:
             keywords = ['game', 'anime']
         
         # キーワード文字列を生成
-        keyword_string = ','.join(keywords[:3])  # 最大3つ
+        keyword_string = ','.join(keywords[:3])
         
         # LoremFlickr URLを生成（常にランダム画像）
         return f"https://loremflickr.com/800/600/{keyword_string}/all?random={hash(title) % 10000}"
@@ -294,7 +294,6 @@ affiliate_engine = AffiliateEngine(config)
 
 def generate_ogp_meta_tags(title: str, description: str, image_url: str, url: str) -> str:
     """OGPメタタグを生成"""
-    import html
     tags = f'''    <meta property="og:title" content="{html.escape(title[:60])}" />
     <meta property="og:description" content="{html.escape(description[:120])}" />
     <meta property="og:image" content="{image_url}" />
@@ -348,10 +347,21 @@ async def index(page: int = Query(1, ge=1)):
     total_pages = (total_articles + limit - 1) // limit
 
     article_html = ""
+    first_image = None
+    
     for article in articles:
-        # 画像URLを決定（RSSにない場合はLoremFlickrのフォールバック使用）
-        image_url = article["image_url"] if article["image_url"] else affiliate_engine.generate_fallback_image_url(article["title"])
-        image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
+        # 画像取得: DB画像またはLoremFlickr フォールバック
+        if article["image_url"]:
+            image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">'
+            image_url = article["image_url"]
+        else:
+            fallback_url = affiliate_engine.generate_fallback_image_url(article["title"])
+            image_tag = f'<img src="{fallback_url}" alt="{article["title"]}" class="card-img-top">'
+            image_url = fallback_url
+        
+        # 最初の記事の画像をOGPで使用
+        if first_image is None:
+            first_image = image_url
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
         processed_title = affiliate_engine.process_title(article["title"], article["id"])
@@ -372,10 +382,10 @@ async def index(page: int = Query(1, ge=1)):
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
-        amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
+        amazon_ranking_url = f"https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0?tag={affiliate_engine.amazon_tracking_id}"
 
         article_html += f'''
-        <div class="col-12 col-md-6 col-lg-4 mb-4 article-card-wrapper">
+        <div class="article-card-wrapper">
             <div class="card h-100 article-card">
                 {hot_label}
                 {image_tag}
@@ -383,8 +393,8 @@ async def index(page: int = Query(1, ge=1)):
                     <small class="text-muted badge bg-info">{article["source"]}</small>
                     {category_html}
                     <h5 class="card-title mt-2">{processed_title}</h5>
-                    <p class="card-text text-muted">{article["content"][:100]}...</p>
-                    <div class="d-flex flex-column gap-2 mt-3">
+                    <p class="card-text text-muted text-clamp">{article["content"][:100]}...</p>
+                    <div class="d-flex flex-column gap-2 mt-auto">
                         <div class="btn-group w-100" role="group">
                             <a href="{amazon_search_url}" class="btn btn-sm btn-warning flex-fill" target="_blank" rel="noopener noreferrer">
                                 🛒 Amazonでチェック
@@ -424,7 +434,18 @@ async def index(page: int = Query(1, ge=1)):
     with open('templates/layout.html', 'r', encoding='utf-8') as f:
         template = f.read()
 
-    html = template.replace(
+    # トップページのOGPメタタグ
+    ogp_tags = generate_ogp_meta_tags(
+        title=config['site']['name'],
+        description=config['site']['description'],
+        image_url=first_image or "https://loremflickr.com/800/600/game,anime",
+        url=config['site']['base_url']
+    )
+
+    html_content = template.replace(
+        '<!-- OGP_META_TAGS -->',
+        ogp_tags
+    ).replace(
         '<!-- ARTICLES_PLACEHOLDER -->',
         article_html
     ).replace(
@@ -441,7 +462,7 @@ async def index(page: int = Query(1, ge=1)):
         str(total_articles)
     )
 
-    return affiliate_engine.inject_adsense(html)
+    return affiliate_engine.inject_adsense(html_content)
 
 
 @app.get("/article/{article_id}", response_class=HTMLResponse)
@@ -460,6 +481,12 @@ async def article_detail(article_id: int):
     # タイトルを処理
     processed_title = affiliate_engine.process_title(article["title"], article_id)
 
+    # 画像取得
+    if article["image_url"]:
+        image_url = article["image_url"]
+    else:
+        image_url = affiliate_engine.generate_fallback_image_url(article["title"])
+
     # カテゴリタグを取得
     category_tags = affiliate_engine.get_category_tags(article["title"])
     category_html = ""
@@ -471,7 +498,7 @@ async def article_detail(article_id: int):
 
     # Amazon検索リンク生成
     amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
-    amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
+    amazon_ranking_url = f"https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0?tag={affiliate_engine.amazon_tracking_id}"
 
     article_html = f'''
     <div class="container mt-5">
@@ -505,7 +532,18 @@ async def article_detail(article_id: int):
     with open('templates/layout.html', 'r', encoding='utf-8') as f:
         template = f.read()
 
-    html = template.replace(
+    # 記事詳細ページのOGPメタタグ
+    ogp_tags = generate_ogp_meta_tags(
+        title=article["title"],
+        description=article["content"][:120],
+        image_url=image_url,
+        url=f"{config['site']['base_url']}article/{article_id}"
+    )
+
+    html_content = template.replace(
+        '<!-- OGP_META_TAGS -->',
+        ogp_tags
+    ).replace(
         '<!-- ARTICLES_PLACEHOLDER -->',
         article_html
     ).replace(
@@ -516,7 +554,7 @@ async def article_detail(article_id: int):
         config['site']['description']
     )
 
-    return affiliate_engine.inject_adsense(html)
+    return affiliate_engine.inject_adsense(html_content)
 
 
 @app.get("/search", response_class=HTMLResponse)
@@ -528,10 +566,20 @@ async def search(q: str = Query(...)):
     articles = remove_duplicate_articles(articles)
 
     article_html = ""
+    first_image = None
+    
     for article in articles:
-        # 画像URLを決定（RSSにない場合はLoremFlickrのフォールバック使用）
-        image_url = article["image_url"] if article["image_url"] else affiliate_engine.generate_fallback_image_url(article["title"])
-        image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
+        # 画像取得
+        if article["image_url"]:
+            image_tag = f'<img src="{article["image_url"]}" alt="{article["title"]}" class="card-img-top">'
+            image_url = article["image_url"]
+        else:
+            fallback_url = affiliate_engine.generate_fallback_image_url(article["title"])
+            image_tag = f'<img src="{fallback_url}" alt="{article["title"]}" class="card-img-top">'
+            image_url = fallback_url
+        
+        if first_image is None:
+            first_image = image_url
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
         processed_title = affiliate_engine.process_title(article["title"], article["id"])
@@ -552,10 +600,10 @@ async def search(q: str = Query(...)):
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
-        amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
+        amazon_ranking_url = f"https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0?tag={affiliate_engine.amazon_tracking_id}"
 
         article_html += f'''
-        <div class="col-12 col-md-6 col-lg-4 mb-4 article-card-wrapper">
+        <div class="article-card-wrapper">
             <div class="card h-100 article-card">
                 {hot_label}
                 {image_tag}
@@ -563,8 +611,8 @@ async def search(q: str = Query(...)):
                     <small class="text-muted badge bg-info">{article["source"]}</small>
                     {category_html}
                     <h5 class="card-title mt-2">{processed_title}</h5>
-                    <p class="card-text text-muted">{article["content"][:100]}...</p>
-                    <div class="d-flex flex-column gap-2 mt-3">
+                    <p class="card-text text-muted text-clamp">{article["content"][:100]}...</p>
+                    <div class="d-flex flex-column gap-2 mt-auto">
                         <div class="btn-group w-100" role="group">
                             <a href="{amazon_search_url}" class="btn btn-sm btn-warning flex-fill" target="_blank" rel="noopener noreferrer">
                                 🛒 Amazonでチェック
@@ -583,7 +631,18 @@ async def search(q: str = Query(...)):
     with open('templates/layout.html', 'r', encoding='utf-8') as f:
         template = f.read()
 
-    html = template.replace(
+    # 検索結果ページのOGPメタタグ
+    ogp_tags = generate_ogp_meta_tags(
+        title=f"検索: {q}",
+        description=f"「{q}」の検索結果",
+        image_url=first_image or "https://loremflickr.com/800/600/game,anime",
+        url=f"{config['site']['base_url']}search?q={q}"
+    )
+
+    html_content = template.replace(
+        '<!-- OGP_META_TAGS -->',
+        ogp_tags
+    ).replace(
         '<!-- ARTICLES_PLACEHOLDER -->',
         article_html if article_html else '<p class="text-center text-muted">検索結果がありません</p>'
     ).replace(
@@ -594,7 +653,7 @@ async def search(q: str = Query(...)):
         config['site']['description']
     )
 
-    return affiliate_engine.inject_adsense(html)
+    return affiliate_engine.inject_adsense(html_content)
 
 
 @app.get("/api/articles")

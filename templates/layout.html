@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ site_name }} - {{ site_description }}</title>
+    <!-- OGP_META_TAGS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
@@ -107,13 +108,20 @@
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             padding: 3rem;
-            margin-bottom: 3rem;
+            margin: 0 auto 3rem auto;
+            max-width: 1200px;
         }
 
         .main-container .row {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            margin: -1rem;
+        }
+
+        .article-card-wrapper {
+            width: 100%;
+            padding: 1rem;
+            display: flex;
         }
 
         /* 記事カード */
@@ -159,6 +167,7 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
+            padding: 1.5rem;
         }
 
         .article-card .card-title {
@@ -169,9 +178,14 @@
             flex-grow: 1;
         }
 
-        .article-card .card-text {
-            line-height: 1.6;
+        .article-card .text-clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.5;
             font-size: 0.95rem;
+            max-height: 4.5em;
         }
 
         .article-card .badge {
@@ -367,98 +381,68 @@
             100% { transform: scale(1); }
         }
 
-        /* レスポンシブ対応 */
-        @media (max-width: 768px) {
-            .header-section h1 {
-                font-size: 2rem;
-            }
-
-            .main-container {
-                padding: 1.5rem;
-            }
-
-            .article-detail {
-                padding: 1.5rem;
-            }
-
-            .article-detail h1 {
-                font-size: 1.8rem;
-            }
-
-            .article-body {
-                font-size: 1rem;
-            }
-
-            .navbar-brand {
-                font-size: 1.2rem;
-            }
-
-            .stats-bar {
-                gap: 1rem;
-            }
-
-            /* スマホでのボタン最適化 */
-            .btn-group .btn {
-                font-size: 0.9rem;
-                padding: 0.5rem 0.75rem;
-            }
-
-            .article-actions .btn {
-                width: 100%;
-                margin-bottom: 0.5rem;
-            }
-
-            .article-actions {
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        /* アニメーション */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .article-card {
-            animation: fadeIn 0.5s ease forwards;
-        }
-
-        .article-card:nth-child(1) { animation-delay: 0.1s; }
-        .article-card:nth-child(2) { animation-delay: 0.2s; }
-        .article-card:nth-child(3) { animation-delay: 0.3s; }
-        .article-card:nth-child(4) { animation-delay: 0.4s; }
-        .article-card:nth-child(5) { animation-delay: 0.5s; }
-        .article-card:nth-child(6) { animation-delay: 0.6s; }
-
-        .article-card-wrapper {
-            width: 100%;
-        }
-
         /* レスポンシブグリッド */
         @media (max-width: 1200px) {
-            .main-container .row {
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            .main-container {
+                padding: 2rem;
             }
         }
 
         @media (max-width: 768px) {
-            .main-container .row {
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-                gap: 1.5rem;
+            .main-container {
+                padding: 1.5rem;
+                margin: 0 auto 2rem auto;
+            }
+
+            .article-card .card-body {
+                min-height: auto;
             }
         }
 
         @media (max-width: 576px) {
+            .main-container {
+                padding: 1rem;
+                margin: 0 auto 2rem auto;
+            }
+
             .main-container .row {
-                grid-template-columns: 1fr;
-                gap: 1rem;
+                margin: -0.5rem;
+            }
+
+            .article-card-wrapper {
+                padding: 0.5rem;
+            }
+        }
+
+        /* Bootstrap互換性: col-lg-4, col-md-6, col-12クラス */
+        .col-lg-4 {
+            width: 33.333333%;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .col-md-6 {
+            width: 50%;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .col-12 {
+            width: 100%;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 1199px) {
+            .col-lg-4 {
+                width: 50%;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .col-lg-4,
+            .col-md-6 {
+                width: 100%;
             }
         }
     </style>
