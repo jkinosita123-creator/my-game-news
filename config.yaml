@@ -8,14 +8,14 @@ database:
   path: "./articles.db"
 
 rss_feeds:
-  - url: "https://news.google.com/rss/search?q=ゲーム&ceid=JP:ja"
-    source: "Google News"
-    priority: 1
-  - url: "https://www.famitsu.com/feed/"
+  - url: "https://feeds.famitsu.com/feed/rss2"
     source: "ファミ通"
-    priority: 2
-  - url: "https://www.4gamer.net/news/"
+    priority: 1
+  - url: "https://www.4gamer.net/rss/"
     source: "4Gamer"
+    priority: 2
+  - url: "https://news.denfaminicogamer.jp/feed"
+    source: "ファミゲーム"
     priority: 2
 
 crawler:

@@ -48,16 +48,60 @@ class RSSCrawler:
             return None
 
     def extract_image_url(self, entry: Any) -> Optional[str]:
-        """フィードエントリから画像URLを抽出"""
+        """フィードエントリから画像URLを抽出（複数の方法に対応）"""
+        # 1. media_content を確認
         if hasattr(entry, 'media_content') and entry.media_content:
-            return entry.media_content[0].get('url')
-
+            for media in entry.media_content:
+                if 'medium' in media and media['medium'] == 'image':
+                    url = media.get('url')
+                    if url:
+                        return url
+        
+        # 2. media_thumbnail を確認
+        if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
+            for thumb in entry.media_thumbnail:
+                url = thumb.get('url')
+                if url:
+                    return url
+        
+        # 3. image タグを確認
         if hasattr(entry, 'image') and entry.image:
-            return entry.image.get('href')
-
-        if hasattr(entry, 'link'):
-            return None
-
+            url = entry.image.get('href') or entry.image.get('url')
+            if url:
+                return url
+        
+        # 4. summary_detail に画像タグが含まれているか確認
+        if hasattr(entry, 'summary_detail') and entry.summary_detail:
+            summary = entry.summary_detail.get('value', '')
+            # <img src="..." を抽出
+            import re
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
+            if img_match:
+                return img_match.group(1)
+        
+        # 5. summary に img タグが含まれているか確認
+        if hasattr(entry, 'summary') and entry.summary:
+            import re
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.summary)
+            if img_match:
+                return img_match.group(1)
+        
+        # 6. description に img タグが含まれているか確認
+        if hasattr(entry, 'description') and entry.description:
+            import re
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.description)
+            if img_match:
+                return img_match.group(1)
+        
+        # 7. content に img タグが含まれているか確認
+        if hasattr(entry, 'content') and entry.content:
+            for content_item in entry.content:
+                if 'value' in content_item:
+                    import re
+                    img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', content_item['value'])
+                    if img_match:
+                        return img_match.group(1)
+        
         return None
 
     def get_entry_content(self, entry: Any) -> str:
