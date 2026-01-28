@@ -36,6 +36,7 @@ crawler.start_scheduler_background()
 def extract_main_keyword(title: str) -> str:
     """タイトルから主要なキーワード（ゲーム名など）を抽出"""
     import re
+    import urllib.parse
     
     # プラットフォーム/大型タイトルを優先
     priority_keywords = [
@@ -46,28 +47,18 @@ def extract_main_keyword(title: str) -> str:
     
     for keyword in priority_keywords:
         if keyword.lower() in title.lower():
-            return keyword
+            # URLエンコード不要（LoremFlickrが日本語を受け付けないため）
+            return 'game'
     
-    # 数字を含む主要な単語を探す（シリーズナンバー付きゲーム）
-    match = re.search(r'(\S+\d+|\S+(?:Ver|version|β|ベータ))', title)
-    if match:
-        keyword = match.group(1)
-        if len(keyword) > 2 and len(keyword) < 30:
-            return keyword
-    
-    # 最初の日本語単語を抽出
-    match = re.search(r'([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+)', title)
+    # タイトルから英数字のみを抽出
+    match = re.search(r'\b([a-zA-Z0-9]+)\b', title)
     if match:
         keyword = match.group(1)
         if len(keyword) > 2:
-            return keyword
+            return keyword.lower()
     
-    # フォールバック：最初の単語
-    words = title.split()
-    if words and len(words[0]) > 2:
-        return words[0]
-    
-    return 'ゲーム'
+    # キーワード抽出失敗時のデフォルト
+    return 'game'
 
 
 class AffiliateEngine:
@@ -319,9 +310,19 @@ async def index(page: int = Query(1, ge=1)):
     total_pages = (total_articles + limit - 1) // limit
 
     article_html = ""
-    for article in articles:
-        # 画像URLを決定（RSSにない場合はLoremFlickrのフォールバック使用）
-        image_url = article["image_url"] if article["image_url"] else affiliate_engine.generate_fallback_image_url(article["title"])
+    # 画像キーワードのローテーション（同じ画像を避ける）
+    image_keywords = ['game', 'anime', 'girl', 'manga', 'cute', 'kawaii', 'beautiful', 'art']
+    
+    for idx, article in enumerate(articles, 1):
+        # タイトルキーワード抽出（テンプレート用）
+        title_keyword = extract_main_keyword(article["title"])
+        
+        # LoremFlickrは日本語を受け付けないため、英語キーワードを使用
+        # インデックスでキーワードをローテーション
+        image_keyword = image_keywords[(idx - 1) % len(image_keywords)]
+        
+        # 画像URLを生成（毎回異なる画像を取得するため?randomを使用）
+        image_url = f'https://loremflickr.com/400/300/{image_keyword},anime,girl/all?random={idx * 1000}'
         image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
@@ -499,9 +500,19 @@ async def search(q: str = Query(...)):
     articles = remove_duplicate_articles(articles)
 
     article_html = ""
-    for article in articles:
-        # 画像URLを決定（RSSにない場合はLoremFlickrのフォールバック使用）
-        image_url = article["image_url"] if article["image_url"] else affiliate_engine.generate_fallback_image_url(article["title"])
+    # 画像キーワードのローテーション（同じ画像を避ける）
+    image_keywords = ['game', 'anime', 'girl', 'manga', 'cute', 'kawaii', 'beautiful', 'art']
+    
+    for idx, article in enumerate(articles, 1):
+        # タイトルキーワード抽出（テンプレート用）
+        title_keyword = extract_main_keyword(article["title"])
+        
+        # LoremFlickrは日本語を受け付けないため、英語キーワードを使用
+        # インデックスでキーワードをローテーション
+        image_keyword = image_keywords[(idx - 1) % len(image_keywords)]
+        
+        # 画像URLを生成（毎回異なる画像を取得するため?randomを使用）
+        image_url = f'https://loremflickr.com/400/300/{image_keyword},anime,girl/all?random={idx * 1000}'
         image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
 
         # タイトルを処理（アフィリエイトリンク埋め込み）
