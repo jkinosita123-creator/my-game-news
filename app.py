@@ -33,6 +33,43 @@ DB = db
 crawler.start_scheduler_background()
 
 
+def extract_main_keyword(title: str) -> str:
+    """タイトルから主要なキーワード（ゲーム名など）を抽出"""
+    import re
+    
+    # プラットフォーム/大型タイトルを優先
+    priority_keywords = [
+        'ドラゴンクエスト', 'ファイナルファンタジー', 'ゼルダ', 'マリオ', 'ポケモン',
+        'モンスターハンター', 'バイオハザード', 'ストリートファイター', 'スプラトゥーン',
+        'Nintendo Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'PC'
+    ]
+    
+    for keyword in priority_keywords:
+        if keyword.lower() in title.lower():
+            return keyword
+    
+    # 数字を含む主要な単語を探す（シリーズナンバー付きゲーム）
+    match = re.search(r'(\S+\d+|\S+(?:Ver|version|β|ベータ))', title)
+    if match:
+        keyword = match.group(1)
+        if len(keyword) > 2 and len(keyword) < 30:
+            return keyword
+    
+    # 最初の日本語単語を抽出
+    match = re.search(r'([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+)', title)
+    if match:
+        keyword = match.group(1)
+        if len(keyword) > 2:
+            return keyword
+    
+    # フォールバック：最初の単語
+    words = title.split()
+    if words and len(words[0]) > 2:
+        return words[0]
+    
+    return 'ゲーム'
+
+
 class AffiliateEngine:
     """アフィリエイトリンク埋め込みエンジン"""
 
@@ -73,90 +110,24 @@ class AffiliateEngine:
         return tags
 
     def generate_fallback_image_url(self, title: str) -> str:
-        """タイトルからキーワードを抽出してLoremFlickr画像URLを生成"""
+        """タイトルから主要キーワードを抽出してLoremFlickr画像URLを生成"""
+        # 主要キーワードを抽出
+        main_keyword = extract_main_keyword(title)
+        
+        # Loremflickr URLを生成（メインキーワード中心）
         import urllib.parse
-        import re
-        
-        # タイトルからキーワード抽出
-        keywords = []
-        
-        # プラットフォーム名を優先
-        platforms = ['Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'Nintendo', 'PC']
-        for platform in platforms:
-            if platform.lower() in title.lower():
-                keywords.append('game')
-                break
-        
-        # ゲーム/アニメ関連キーワードをチェック
-        game_keywords = ['ゲーム', 'ソフト', 'RPG', 'アクション', 'シューティング', 'スポーツ']
-        anime_keywords = ['アニメ', 'キャラ', '声優', 'マンガ']
-        girl_keywords = ['女の子', 'キャラクター', 'グッズ']
-        
-        for kw in game_keywords:
-            if kw in title:
-                keywords.append('game')
-                break
-        
-        for kw in anime_keywords:
-            if kw in title:
-                keywords.append('anime')
-                break
-        
-        for kw in girl_keywords:
-            if kw in title:
-                keywords.append('girl')
-                break
-        
-        # デフォルトキーワード
-        if not keywords:
-            keywords = ['game', 'anime']
-        
-        # キーワード文字列を生成
-        keyword_string = ','.join(keywords[:3])  # 最大3つ
-        
-        # LoremFlickr URLを生成（常にランダム画像）
-        return f"https://loremflickr.com/800/600/{keyword_string}/all?random={hash(title) % 10000}"
+        keyword_encoded = urllib.parse.quote(main_keyword)
+        return f"https://loremflickr.com/800/600/{keyword_encoded},game,anime/all?random={hash(title) % 10000}"
 
     def generate_amazon_search_link(self, title: str) -> str:
-        """記事タイトルでAmazon検索リンクを生成（最適化版）"""
+        """記事タイトルから主要キーワードを抽出してAmazon検索リンクを生成"""
         import urllib.parse
-
-        # タイトルから括弧内の情報を除去
-        title_clean = re.sub(r'[（(].*[）)]', '', title).strip()
-        title_clean = re.sub(r'[【].*[】]', '', title_clean).strip()
-        title_clean = re.sub(r'[『].*[』]', '', title_clean).strip()
-
-        # 意味のある検索キーワードを抽出
-        keywords = []
         
-        # プラットフォームキーワードをチェック
-        platforms = ['Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'Nintendo', 'PC']
-        for platform in platforms:
-            if platform in title_clean:
-                keywords.append(platform)
-                break
+        # 主要キーワードを抽出
+        main_keyword = extract_main_keyword(title)
         
-        # ゲーム関連キーワードをチェック
-        game_keywords = ['ゲーム', 'ソフト', 'タイトル', '発売', '予約', '限定版']
-        for kw in game_keywords:
-            if kw in title_clean and len(' '.join(keywords + [kw])) <= 20:
-                keywords.append(kw)
-                break
-        
-        # キーワードが見つからない場合は最初の単語を使用
-        if not keywords:
-            words = re.split(r'[\s　・]', title_clean)
-            keywords = [word for word in words[:2] if word]
-        
-        # 検索クエリを構築（最大20文字程度）
-        search_query = ' '.join(keywords)
-        if len(search_query) > 20:
-            search_query = search_query[:20].strip()
-        
-        if not search_query.strip():
-            search_query = "ゲーム"
-        
-        encoded_query = urllib.parse.quote(search_query.strip())
+        # エンコード
+        encoded_query = urllib.parse.quote(main_keyword.strip())
         return f"https://www.amazon.co.jp/s?k={encoded_query}&tag={self.amazon_tracking_id}"
 
     def is_hot_news(self, title: str) -> bool:
