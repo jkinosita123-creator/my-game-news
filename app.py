@@ -49,11 +49,49 @@ class AffiliateEngine:
         return keyword_map
 
     def generate_amazon_search_link(self, title: str) -> str:
-        """記事タイトルでAmazon検索リンクを生成"""
-        # タイトルをURLエンコード
+        """記事タイトルでAmazon検索リンクを生成（最適化版）"""
+        import re
         import urllib.parse
-        encoded_title = urllib.parse.quote(title)
-        return f"https://www.amazon.co.jp/s?k={encoded_title}&tag={self.amazon_tracking_id}"
+
+        # タイトルから括弧内の情報を除去（全角/半角対応）
+        title_clean = re.sub(r'[（(].*[）)]', '', title).strip()
+        title_clean = re.sub(r'[【].*[】]', '', title_clean).strip()
+        title_clean = re.sub(r'[『].*[』]', '', title_clean).strip()
+
+        # 意味のある検索キーワードを抽出
+        # ゲーム名やプラットフォーム名を優先
+        keywords = []
+        
+        # プラットフォームキーワードをチェック
+        platforms = ['Switch', 'PS5', 'PS4', 'Xbox', 'Steam', 'Nintendo']
+        for platform in platforms:
+            if platform in title_clean:
+                keywords.append(platform)
+                break
+        
+        # ゲーム関連キーワードをチェック
+        game_keywords = ['ゲーム', 'ソフト', 'タイトル', '発売', '予約', '限定版', 'コレクターズ', 'エディション']
+        for kw in game_keywords:
+            if kw in title_clean and len(' '.join(keywords + [kw])) <= 20:
+                keywords.append(kw)
+                break
+        
+        # キーワードが見つからない場合は最初の単語を使用
+        if not keywords:
+            words = re.split(r'[\s　・]', title_clean)
+            keywords = [word for word in words[:2] if word]  # 最初の2単語
+        
+        # 検索クエリを構築（最大20文字程度）
+        search_query = ' '.join(keywords)
+        if len(search_query) > 20:
+            search_query = search_query[:20].strip()
+        
+        # 最低限のキーワードを確保
+        if not search_query.strip():
+            search_query = "ゲーム"
+        
+        encoded_query = urllib.parse.quote(search_query.strip())
+        return f"https://www.amazon.co.jp/s?k={encoded_query}&tag={self.amazon_tracking_id}"
 
     def is_hot_news(self, title: str) -> bool:
         """タイトルに「爆売れ」キーワードが含まれるか判定"""
@@ -116,47 +154,6 @@ class AffiliateEngine:
                         affiliate_url = self._build_amazon_link(
                             link_config['url_pattern'],
                             self.amazon_tracking_id
-                        )
-                        processed_content = self._inject_link(
-                            processed_content, keyword, affiliate_url
-                        )
-
-                        if article_id:
-                            DB.save_affiliate_link(
-                                article_id, keyword, 'amazon', None, affiliate_url
-                            )
-
-                    elif link_type == 'rakuten' and self.config['affiliate'].get('rakuten', {}).get('enabled'):
-                        affiliate_url = self._build_rakuten_link(
-                            link_config['url_pattern'],
-                            self.config['affiliate']['rakuten']['affiliate_id']
-                        )
-                        processed_content = self._inject_link(
-                            processed_content, keyword, affiliate_url
-                        )
-
-                        if article_id:
-                            DB.save_affiliate_link(
-                                article_id, keyword, 'rakuten', None, affiliate_url
-                            )
-
-        return processed_content
-
-    def process_content(self, content: str, article_id: Optional[int] = None) -> str:
-        """コンテンツにアフィリエイトリンクを埋め込む"""
-        processed_content = content
-
-        for keyword, keyword_config in self.keywords.items():
-            if keyword.lower() in content.lower():
-                affiliate_links = keyword_config.get('affiliate_links', [])
-
-                for link_config in affiliate_links:
-                    link_type = link_config.get('type', '')
-
-                    if link_type == 'amazon' and self.config['affiliate'].get('amazon', {}).get('enabled'):
-                        affiliate_url = self._build_amazon_link(
-                            link_config['url_pattern'],
-                            self.config['affiliate']['amazon']['tracking_id']
                         )
                         processed_content = self._inject_link(
                             processed_content, keyword, affiliate_url
@@ -253,6 +250,7 @@ async def index(page: int = Query(1, ge=1)):
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+        amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
 
         article_html += f'''
         <div class="col-md-6 col-lg-4 mb-4">
@@ -263,14 +261,16 @@ async def index(page: int = Query(1, ge=1)):
                     <small class="text-muted badge bg-info">{article["source"]}</small>
                     <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <small class="text-muted">{article["published_at"][:10]}</small>
-                        <div class="btn-group" role="group">
-                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning" target="_blank" rel="noopener noreferrer">
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <div class="btn-group w-100" role="group">
+                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning flex-fill" target="_blank" rel="noopener noreferrer">
                                 🛒 Amazonでチェック
                             </a>
                             <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
                         </div>
+                        <a href="{amazon_ranking_url}" class="btn btn-sm btn-success w-100" target="_blank" rel="noopener noreferrer">
+                            🏆 ゲーム売れ筋ランキング
+                        </a>
                     </div>
                 </div>
             </div>
@@ -339,6 +339,7 @@ async def article_detail(article_id: int):
 
     # Amazon検索リンク生成
     amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+    amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
 
     article_html = f'''
     <div class="container mt-5">
@@ -355,10 +356,13 @@ async def article_detail(article_id: int):
             </div>
             <hr>
             <div class="article-actions">
-                <a href="{amazon_search_url}" class="btn btn-warning me-2" target="_blank" rel="noopener noreferrer">
+                <a href="{amazon_search_url}" class="btn btn-warning me-2 mb-2" target="_blank" rel="noopener noreferrer">
                     🛒 Amazonで関連商品をチェック
                 </a>
-                <a href="{article["url"]}" class="btn btn-primary me-2" target="_blank">元の記事</a>
+                <a href="{amazon_ranking_url}" class="btn btn-success me-2 mb-2" target="_blank" rel="noopener noreferrer">
+                    🏆 ゲーム売れ筋ランキング
+                </a>
+                <a href="{article["url"]}" class="btn btn-primary me-2 mb-2" target="_blank">元の記事</a>
                 <a href="/" class="btn btn-secondary">トップへ戻る</a>
             </div>
         </article>
@@ -401,6 +405,7 @@ async def search(q: str = Query(...)):
 
         # Amazon検索リンク生成
         amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+        amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
 
         article_html += f'''
         <div class="col-md-6 col-lg-4 mb-4">
@@ -411,14 +416,16 @@ async def search(q: str = Query(...)):
                     <small class="text-muted badge bg-info">{article["source"]}</small>
                     <h5 class="card-title mt-2">{processed_title}</h5>
                     <p class="card-text text-muted">{article["content"][:100]}...</p>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <small class="text-muted">{article["published_at"][:10]}</small>
-                        <div class="btn-group" role="group">
-                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning" target="_blank" rel="noopener noreferrer">
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <div class="btn-group w-100" role="group">
+                            <a href="{amazon_search_url}" class="btn btn-sm btn-warning flex-fill" target="_blank" rel="noopener noreferrer">
                                 🛒 Amazonでチェック
                             </a>
                             <a href="/article/{article["id"]}" class="btn btn-sm btn-primary">詳細</a>
                         </div>
+                        <a href="{amazon_ranking_url}" class="btn btn-sm btn-success w-100" target="_blank" rel="noopener noreferrer">
+                            🏆 ゲーム売れ筋ランキング
+                        </a>
                     </div>
                 </div>
             </div>
