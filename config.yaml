@@ -1,0 +1,72 @@
+site:
+  name: "俺専用最強速報"
+  description: "最新ゲームニュース・情報まとめ"
+  language: "ja"
+  base_url: "http://localhost:8000"
+
+database:
+  path: "./articles.db"
+
+rss_feeds:
+  - url: "https://news.google.com/rss/search?q=ゲーム&ceid=JP:ja"
+    source: "Google News"
+    priority: 1
+  - url: "https://www.famitsu.com/feed/"
+    source: "ファミ通"
+    priority: 2
+  - url: "https://www.4gamer.net/news/"
+    source: "4Gamer"
+    priority: 2
+
+crawler:
+  interval_minutes: 60
+  timeout_seconds: 30
+  max_articles: 500
+  cleanup_days: 30
+
+affiliate:
+  amazon:
+    enabled: true
+    tracking_id: "YOUR_AMAZON_TRACKING_ID"
+    region: "JP"
+  rakuten:
+    enabled: true
+    affiliate_id: "YOUR_RAKUTEN_AFFILIATE_ID"
+    service_id: "YOUR_RAKUTEN_SERVICE_ID"
+  google_adsense:
+    enabled: true
+    publisher_id: "YOUR_GOOGLE_ADSENSE_ID"
+    ad_slot: "YOUR_AD_SLOT_ID"
+
+keywords:
+  affiliate_targets:
+    - keyword: "Switch"
+      product_type: "gaming_console"
+      affiliate_links:
+        - type: "amazon"
+          url_pattern: "https://www.amazon.co.jp/s?k=Nintendo+Switch"
+        - type: "rakuten"
+          url_pattern: "https://www.rakuten.co.jp/search/mall/Nintendo+Switch/"
+    - keyword: "PS5"
+      product_type: "gaming_console"
+      affiliate_links:
+        - type: "amazon"
+          url_pattern: "https://www.amazon.co.jp/s?k=PlayStation+5"
+        - type: "rakuten"
+          url_pattern: "https://www.rakuten.co.jp/search/mall/PlayStation+5/"
+    - keyword: "予約開始"
+      product_type: "preorder"
+    - keyword: "新作"
+      product_type: "new_release"
+    - keyword: "限定版"
+      product_type: "limited_edition"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: true
+
+logging:
+  level: "INFO"
+  file: "./logs/app.log"
