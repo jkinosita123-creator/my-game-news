@@ -469,14 +469,25 @@ async def article_detail(article_id: int):
     amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
     amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
 
+    # 詳細ページ用の大きな画像を生成（かわいい女の子優先）
+    detail_image_keywords = ['girl,cute,kawaii', 'anime,girl,beautiful', 'manga,girl,kawaii', 'girl,smile,cute', 'girl,portrait,beautiful']
+    image_keyword = detail_image_keywords[hash(article["title"]) % len(detail_image_keywords)]
+    detail_image_url = f'https://loremflickr.com/800/400/{image_keyword}/all?random={article["id"]}'
+
+    # published_at を文字列にフォーマット
+    published_at_str = article["published_at"].strftime('%Y年%m月%d日 %H:%M') if isinstance(article["published_at"], datetime) else str(article["published_at"])
+
     article_html = f'''
     <div class="container mt-5">
         <article class="article-detail">
+            <div class="detail-image-container mb-4">
+                <img src="{detail_image_url}" alt="{article['title']}" class="detail-image img-fluid rounded shadow" onerror="this.style.backgroundColor='#e8d5f2'">
+            </div>
             <h1>{processed_title}</h1>
             {category_html}
             <div class="article-meta">
                 <span class="badge bg-info">{article["source"]}</span>
-                <span class="text-muted ms-3">{article["published_at"]}</span>
+                <span class="text-muted ms-3">{published_at_str}</span>
                 <span class="text-muted ms-3">閲覧: {article["views"]}</span>
             </div>
             <hr>
