@@ -236,8 +236,16 @@ class AffiliateEngine:
 
     def _inject_link(self, content: str, keyword: str, affiliate_url: str) -> str:
         """コンテンツにリンクを注入（最初の1回のみ）"""
-        pattern = rf'(?<!<a[^>]*>\s*)\b{re.escape(keyword)}\b(?!</a>)'
+        # すでにリンク済みならスキップ
+        link_text = f'<a href="{affiliate_url}"'
+        if link_text in content:
+            return content
+        
+        # 単純な単語境界マッチ（可変長 look-behind の問題を回避）
+        pattern = rf'\b{re.escape(keyword)}\b'
         replacement = f'<a href="{affiliate_url}" target="_blank" rel="noopener noreferrer">{keyword}</a>'
+        
+        # 最初の1回だけ置換（count=1）
         return re.sub(pattern, replacement, content, count=1, flags=re.IGNORECASE)
 
     def inject_adsense(self, html_content: str) -> str:
