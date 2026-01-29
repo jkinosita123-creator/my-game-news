@@ -627,6 +627,86 @@ async def search(q: str = Query(...)):
     return affiliate_engine.inject_adsense(html)
 
 
+@app.get("/deals", response_class=HTMLResponse)
+async def deals(q: Optional[str] = Query(None)):
+    """セール情報ページ: Amazon検索リンクをまとめて表示"""
+    import urllib.parse
+
+    # ユーザー指定クエリがあればそれを使う
+    terms = []
+    if q:
+        terms.append(q)
+    else:
+        # 設定にあるアフィリエイト対象キーワードを基にセール検索語を作成
+        for kw in config['keywords'].get('affiliate_targets', [])[:30]:
+            k = kw.get('keyword')
+            if k:
+                terms.append(f"{k} セール")
+
+        # 汎用のセール語を追加
+        terms.extend(['ゲーム セール', 'セール', '割引', 'タイムセール', 'ポイント還元'])
+
+    # 重複を取り除き上限を設定
+    seen = set()
+    uniq_terms = []
+    for t in terms:
+        if t not in seen:
+            seen.add(t)
+            uniq_terms.append(t)
+    terms = uniq_terms[:30]
+
+    article_html = ""
+    for idx, term in enumerate(terms, 1):
+        encoded = urllib.parse.quote(term)
+        amazon_url = f"https://www.amazon.co.jp/s?k={encoded}&tag={affiliate_engine.amazon_tracking_id}"
+        rakuten_enabled = config['affiliate'].get('rakuten', {}).get('enabled', False)
+        rakuten_url = None
+        if rakuten_enabled:
+            rakuten_aff = config['affiliate']['rakuten'].get('affiliate_id')
+            rakuten_url = f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(term)}/?f=sh&p=1&scid=af_pc_etc&sc2={rakuten_aff}"
+
+        image_keyword = term.split()[0] if term.split() else 'game'
+        image_url = f'https://loremflickr.com/400/300/{urllib.parse.quote(image_keyword)},game/all?random={idx * 123}'
+
+        buttons = f'<a href="{amazon_url}" class="btn btn-sm btn-warning flex-fill" target="_blank" rel="noopener noreferrer">🛒 Amazonで検索</a>'
+        if rakuten_url:
+            buttons += f'<a href="{rakuten_url}" class="btn btn-sm btn-secondary ms-2" target="_blank" rel="noopener noreferrer">🛍 Rakuten</a>'
+
+        article_html += f'''
+        <div class="col-12 col-md-6 col-lg-4 mb-4 article-card-wrapper">
+            <div class="card h-100 article-card">
+                <img src="{image_url}" alt="{term}" class="card-img-top">
+                <div class="card-body">
+                    <h5 class="card-title">{term}</h5>
+                    <p class="card-text text-muted">Amazonでのセールや割引情報を素早く検索できます。</p>
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <div class="btn-group w-100" role="group">
+                            {buttons}
+                        </div>
+                        <a href="https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0" class="btn btn-sm btn-success w-100 mt-2" target="_blank" rel="noopener noreferrer">🏆 売れ筋ランキング</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        '''
+
+    with open('templates/layout.html', 'r', encoding='utf-8') as f:
+        template = f.read()
+
+    html = template.replace(
+        '<!-- ARTICLES_PLACEHOLDER -->',
+        article_html if article_html else '<p class="text-center text-muted">セール情報が見つかりません</p>'
+    ).replace(
+        '{{ site_name }}',
+        config['site']['name']
+    ).replace(
+        '{{ site_description }}',
+        config['site']['description']
+    )
+
+    return affiliate_engine.inject_adsense(html)
+
+
 @app.get("/api/articles")
 async def api_articles(limit: int = 20, offset: int = 0, source: Optional[str] = None):
     """API: 記事一覧"""
