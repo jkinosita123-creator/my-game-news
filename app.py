@@ -29,8 +29,8 @@ crawler = RSSCrawler('config.yaml')
 SITE_CONFIG = config
 DB = db
 
-# クローラーをバックグラウンドで開始
-crawler.start_scheduler_background()
+# NOTE: クローラーのスケジューラはプロセス分岐（uvicorn workers）で
+# 複数回起動されると問題を起こすため、__main__ ブロックでのみ開始します。
 
 
 def extract_main_keyword(title: str) -> str:
@@ -321,56 +321,57 @@ def remove_duplicate_articles(articles: List[Dict[str, Any]], similarity_thresho
 @app.get("/", response_class=HTMLResponse)
 async def index(page: int = Query(1, ge=1)):
     """トップページ"""
-    limit = 20
-    offset = (page - 1) * limit
+    try:
+        limit = 20
+        offset = (page - 1) * limit
 
-    articles = db.get_recent_articles(limit=limit + 10, offset=offset)
-    
-    # 重複記事を除去
-    articles = remove_duplicate_articles(articles)
-    articles = articles[:limit]
-    
-    total_articles = db.get_total_articles()
-    total_pages = (total_articles + limit - 1) // limit
-
-    article_html = ""
-    # 画像キーワードのローテーション（同じ画像を避ける）
-    image_keywords = ['game', 'anime', 'girl', 'manga', 'cute', 'kawaii', 'beautiful', 'art']
-    
-    for idx, article in enumerate(articles, 1):
-        # タイトルキーワード抽出（テンプレート用）
-        title_keyword = extract_main_keyword(article["title"])
+        articles = db.get_recent_articles(limit=limit + 10, offset=offset)
         
-        # LoremFlickrは日本語を受け付けないため、英語キーワードを使用
-        # インデックスでキーワードをローテーション
-        image_keyword = image_keywords[(idx - 1) % len(image_keywords)]
+        # 重複記事を除去
+        articles = remove_duplicate_articles(articles)
+        articles = articles[:limit]
         
-        # 画像URLを生成（毎回異なる画像を取得するため?randomを使用）
-        image_url = f'https://loremflickr.com/400/300/{image_keyword},anime,girl/all?random={idx * 1000}'
-        image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
+        total_articles = db.get_total_articles()
+        total_pages = (total_articles + limit - 1) // limit
 
-        # タイトルを処理（アフィリエイトリンク埋め込み）
-        processed_title = affiliate_engine.process_title(article["title"], article["id"])
+        article_html = ""
+        # 画像キーワードのローテーション（同じ画像を避ける）
+        image_keywords = ['game', 'anime', 'girl', 'manga', 'cute', 'kawaii', 'beautiful', 'art']
+        
+        for idx, article in enumerate(articles, 1):
+            # タイトルキーワード抽出（テンプレート用）
+            title_keyword = extract_main_keyword(article["title"])
+            
+            # LoremFlickrは日本語を受け付けないため、英語キーワードを使用
+            # インデックスでキーワードをローテーション
+            image_keyword = image_keywords[(idx - 1) % len(image_keywords)]
+            
+            # 画像URLを生成（毎回異なる画像を取得するため?randomを使用）
+            image_url = f'https://loremflickr.com/400/300/{image_keyword},anime,girl/all?random={idx * 1000}'
+            image_tag = f'<img src="{image_url}" alt="{article["title"]}" class="card-img-top">'
 
-        # ホットニュース判定
-        hot_label = ""
-        if affiliate_engine.is_hot_news(article["title"]):
-            hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
+            # タイトルを処理（アフィリエイトリンク埋め込み）
+            processed_title = affiliate_engine.process_title(article["title"], article["id"])
 
-        # カテゴリタグを取得
-        category_tags = affiliate_engine.get_category_tags(article["title"])
-        category_html = ""
-        if category_tags:
-            category_html = "<div class='mb-2'>"
-            for tag in category_tags:
-                category_html += f'<span class="category-tag {tag["tag"]}">{tag["label"]}</span>'
-            category_html += "</div>"
+            # ホットニュース判定
+            hot_label = ""
+            if affiliate_engine.is_hot_news(article["title"]):
+                hot_label = '<div class="hot-news-label">🔥お宝情報！</div>'
 
-        # Amazon検索リンク生成
-        amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
-        amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
+            # カテゴリタグを取得
+            category_tags = affiliate_engine.get_category_tags(article["title"])
+            category_html = ""
+            if category_tags:
+                category_html = "<div class='mb-2'>"
+                for tag in category_tags:
+                    category_html += f'<span class="category-tag {tag["tag"]}">{tag["label"]}</span>'
+                category_html += "</div>"
 
-        article_html += f'''
+            # Amazon検索リンク生成
+            amazon_search_url = affiliate_engine.generate_amazon_search_link(article["title"])
+            amazon_ranking_url = "https://www.amazon.co.jp/gp/bestsellers/videogames/ref=zg_bs_nav_0"
+
+            article_html += f'''
         <div class="col-12 col-md-6 col-lg-4 mb-4 article-card-wrapper">
             <div class="card h-100 article-card">
                 {hot_label}
@@ -396,48 +397,52 @@ async def index(page: int = Query(1, ge=1)):
         </div>
         '''
 
-    pagination_html = ""
-    if total_pages > 1:
-        pagination_html = f'''
+        pagination_html = ""
+        if total_pages > 1:
+            pagination_html = f'''
         <nav aria-label="Page navigation" class="mt-5">
             <ul class="pagination justify-content-center">
         '''
-        if page > 1:
-            pagination_html += f'<li class="page-item"><a class="page-link" href="/?page={page-1}">前へ</a></li>'
+            if page > 1:
+                pagination_html += f'<li class="page-item"><a class="page-link" href="/?page={page-1}">前へ</a></li>'
 
-        for p in range(max(1, page - 2), min(total_pages + 1, page + 3)):
-            active = "active" if p == page else ""
-            pagination_html += f'<li class="page-item {active}"><a class="page-link" href="/?page={p}">{p}</a></li>'
+            for p in range(max(1, page - 2), min(total_pages + 1, page + 3)):
+                active = "active" if p == page else ""
+                pagination_html += f'<li class="page-item {active}"><a class="page-link" href="/?page={p}">{p}</a></li>'
 
-        if page < total_pages:
-            pagination_html += f'<li class="page-item"><a class="page-link" href="/?page={page+1}">次へ</a></li>'
+            if page < total_pages:
+                pagination_html += f'<li class="page-item"><a class="page-link" href="/?page={page+1}">次へ</a></li>'
 
-        pagination_html += '''
+            pagination_html += '''
             </ul>
         </nav>
         '''
 
-    with open('templates/layout.html', 'r', encoding='utf-8') as f:
-        template = f.read()
+        with open('templates/layout.html', 'r', encoding='utf-8') as f:
+            template = f.read()
 
-    html = template.replace(
-        '<!-- ARTICLES_PLACEHOLDER -->',
-        article_html
-    ).replace(
-        '<!-- PAGINATION_PLACEHOLDER -->',
-        pagination_html
-    ).replace(
-        '{{ site_name }}',
-        config['site']['name']
-    ).replace(
-        '{{ site_description }}',
-        config['site']['description']
-    ).replace(
-        '{{ total_articles }}',
-        str(total_articles)
-    )
+        html = template.replace(
+            '<!-- ARTICLES_PLACEHOLDER -->',
+            article_html
+        ).replace(
+            '<!-- PAGINATION_PLACEHOLDER -->',
+            pagination_html
+        ).replace(
+            '{{ site_name }}',
+            config['site']['name']
+        ).replace(
+            '{{ site_description }}',
+            config['site']['description']
+        ).replace(
+            '{{ total_articles }}',
+            str(total_articles)
+        )
 
-    return affiliate_engine.inject_adsense(html)
+        return affiliate_engine.inject_adsense(html)
+    
+    except Exception as e:
+        logger.error(f"Error in index route: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 @app.get("/article/{article_id}", response_class=HTMLResponse)
@@ -659,10 +664,16 @@ if __name__ == "__main__":
     port = config['server'].get('port', 8000)
     workers = config['server'].get('workers', 4)
 
+    # 親プロセスでクローラースケジューラを起動（worker 起動前）
+    try:
+        crawler.start_scheduler_background()
+    except Exception as e:
+        logger.error(f"Failed to start crawler scheduler: {e}")
+
     uvicorn.run(
         "app:app",
         host=host,
         port=port,
         workers=workers,
-        reload=config['server'].get('reload', True)
+        reload=config['server'].get('reload', False)
     )

@@ -72,9 +72,9 @@ keywords:
 
 server:
   host: "0.0.0.0"
-  port: 8000
-  workers: 4
-  reload: true
+  port: 9000
+  workers: 1
+  reload: false
 
 logging:
   level: "INFO"
