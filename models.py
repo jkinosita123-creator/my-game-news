@@ -170,7 +170,15 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        articles = [dict(row) for row in rows]
+        # published_at を datetime オブジェクトに変換
+        for article in articles:
+            if isinstance(article['published_at'], str):
+                try:
+                    article['published_at'] = datetime.fromisoformat(article['published_at'])
+                except:
+                    article['published_at'] = datetime.now()
+        return articles
 
     def get_article_by_id(self, article_id: int) -> Optional[Dict[str, Any]]:
         """IDで記事を取得"""
@@ -182,7 +190,18 @@ class DatabaseManager:
         row = cursor.fetchone()
         conn.close()
 
-        return dict(row) if row else None
+        if not row:
+            return None
+        
+        article = dict(row)
+        # published_at を datetime オブジェクトに変換
+        if isinstance(article['published_at'], str):
+            try:
+                article['published_at'] = datetime.fromisoformat(article['published_at'])
+            except:
+                article['published_at'] = datetime.now()
+        
+        return article
 
     def increment_views(self, article_id: int):
         """閲覧数をインクリメント"""
@@ -274,4 +293,13 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        articles = [dict(row) for row in rows]
+        # published_at を datetime オブジェクトに変換
+        for article in articles:
+            if isinstance(article['published_at'], str):
+                try:
+                    article['published_at'] = datetime.fromisoformat(article['published_at'])
+                except:
+                    article['published_at'] = datetime.now()
+        
+        return articles

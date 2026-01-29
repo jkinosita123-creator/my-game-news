@@ -111,14 +111,30 @@ class AffiliateEngine:
         return f"https://loremflickr.com/800/600/{keyword_encoded},game,anime/all?random={hash(title) % 10000}"
 
     def generate_amazon_search_link(self, title: str) -> str:
-        """記事タイトルから主要キーワードを抽出してAmazon検索リンクを生成"""
+        """記事タイトルから主要キーワード（「」『』内）を抽出してAmazon検索リンクを生成"""
         import urllib.parse
+        import re
         
-        # 主要キーワードを抽出
-        main_keyword = extract_main_keyword(title)
+        # 「」や『』で囲まれたゲームタイトルを抽出
+        game_title = None
+        
+        # 「」パターン
+        match = re.search(r'「([^」]+)」', title)
+        if match:
+            game_title = match.group(1).strip()
+        
+        # 『』パターン
+        if not game_title:
+            match = re.search(r'『([^』]+)』', title)
+            if match:
+                game_title = match.group(1).strip()
+        
+        # タイトル抽出に失敗した場合は、従来の方法を使用
+        if not game_title:
+            game_title = extract_main_keyword(title)
         
         # エンコード
-        encoded_query = urllib.parse.quote(main_keyword.strip())
+        encoded_query = urllib.parse.quote(game_title.strip())
         return f"https://www.amazon.co.jp/s?k={encoded_query}&tag={self.amazon_tracking_id}"
 
     def is_hot_news(self, title: str) -> bool:
@@ -273,6 +289,14 @@ def remove_duplicate_articles(articles: List[Dict[str, Any]], similarity_thresho
     """タイトルが酷似している記事を除去（最新のもののみ残す）"""
     if not articles:
         return articles
+    
+    # 記事の published_at を datetime オブジェクトに標準化
+    for article in articles:
+        if isinstance(article['published_at'], str):
+            try:
+                article['published_at'] = datetime.fromisoformat(article['published_at'])
+            except:
+                article['published_at'] = datetime.now()
     
     filtered_articles = []
     for article in articles:

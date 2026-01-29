@@ -17,6 +17,9 @@ rss_feeds:
   - url: "https://news.denfaminicogamer.jp/feed"
     source: "ファミゲーム"
     priority: 2
+  - url: "https://news.google.com/rss/search?q=ゲーム&hl=ja&gl=JP&ceid=JP:ja"
+    source: "Google News"
+    priority: 2
 
 crawler:
   interval_minutes: 15
